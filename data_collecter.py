@@ -203,9 +203,7 @@ def outputFile(df):
     except Exception as e:
         print("An exception occurred:", str(e))
         print("CSV not created")
-
     conn.close()
-
 
 # store tweets in a database
 if __name__ == "__main__":
@@ -213,9 +211,5 @@ if __name__ == "__main__":
     preprocessing(df)
     df['clean_tweet'] = df.apply(preprocessing, axis=1)
     df = analysis(df)
-    print()
-    print(df.columns)
-    print(df)
-    print()
     insert()
     outputFile(df)

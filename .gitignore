@@ -4,3 +4,6 @@ generate_user_access_tokens.py
 __pycache__
 .DS_Store
 .vscode/
+env/
+generate_user_access_tokens.py
+output.csv

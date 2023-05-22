@@ -3,113 +3,219 @@ from tweepy import client
 import config
 import datetime
 import pandas as pd
+import psycopg2
+import preprocessor as p
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from nltk.sentiment.util import *
 
-#Authenticate using OAuth2.0 Twitter
-OAuth2_client = tweepy.Client(
-    bearer_token=config.BEARER_TOKEN,  
-    consumer_key=config.API_KEY, 
-    consumer_secret=config.API_KEY_SECRET, 
-    access_token=config.ACCESS_TOKEN, 
-    access_token_secret=config.ACCESS_TOKEN_SECRET
-    )
+# Authenticate using OAuth2.0 Twitter
+# OUTPUT: TYPE(dataframe)
+def collectData():
+    auth = tweepy.Client(
+        bearer_token=config.BEARER_TOKEN,  
+        consumer_key=config.API_KEY, 
+        consumer_secret=config.API_KEY_SECRET, 
+        access_token=config.ACCESS_TOKEN, 
+        access_token_secret=config.ACCESS_TOKEN_SECRET
+        )
 
-q = 'tesla -is:retweet'
+    # use the datetime module here (automate)
+    yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
+    year = yesterday.strftime("%Y")
+    month = yesterday.strftime("%m")
+    day = yesterday.strftime("%d")
+    hour = "00"
+    minute = '00'
+    minute_1 = '01'
+    startTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute}', '%Y%m%d%H%M')
+    endTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute_1}', '%Y%m%d%H%M')
+    df = pd.DataFrame()
 
-# use the datetime module here (automate)
-yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
-year = yesterday.strftime("%Y")
-month = yesterday.strftime("%m")
-day = yesterday.strftime("%d")
-hour = '00'
-minute_1 = '00'
-minute_2 = '01'
-second = '00'
-format_data = '%Y%m%d%H%M'
-test_str = '202201140015'
-test_int = int(test_str)
-startTime = datetime.datetime.strptime(f'{year}{month}{day}{minute_1}', '%Y%m%d%M')
-endTime = datetime.datetime.strptime(f'{year}{month}{day}{minute_2}', '%Y%m%d%M')
-data = {}
+    symbol_list = ["TSLA", "AAPL", "AMZN"]
 
-# a function that return endtime that leads to a query with a result_count less than or equal to 100
-# INPUT TYPES: start and end: datetime object
-# RETURN TYPES: end: datetime object
-def find_end_time(start, end):
-    # start and end need to be a datetime object
-    tweets = OAuth2_client.search_recent_tweets(query=q, start_time=start, end_time=end, max_results=100)
-    num_of_tweets = tweets.meta['result_count']
-    tweet_limit = 100
+    # search tweets
+    for symbol in symbol_list:
+        q = f'{symbol} -is:retweet lang:en'
 
-    while num_of_tweets < tweet_limit:
-        end += datetime.timedelta(minutes=1)
-        tweets = OAuth2_client.search_recent_tweets(query=q, start_time=start, end_time=end, max_results=100)
-        num_of_tweets = tweets.meta['result_count']
+        tweets = auth.search_recent_tweets(
+            query=q, 
+            start_time=startTime, 
+            end_time=endTime, 
+            max_results=10)
 
-    # decrement end by 1 to ensure that it is a number less than 100
-    end -= datetime.timedelta(minutes=1)
-    return end
+        # extract 22k tweets per company (3 companies)
+        for tweet in tweets.data:
+            row = pd.DataFrame({
+                "id": [tweet.id],
+                "symbol": [symbol],
+                "text": [tweet.text],
+                "start": [startTime],
+                "end": [endTime]
+            })
+            df = pd.concat([df, row])
+            print(row)
+    return df
 
-def store_data(counter, tweets, start, end):
-    l1 = [tweets, start, end]
-    counter += 1
-    data[counter] = l1
-    return data
+# source: https://archive.is/9ApqZ#selection-1633.90-1645.43
+# Using a library to deal with preprocessing
+def preprocessing(row):
+    text = str(row['text'])
 
-def get_tweets_from_one_day(start, end):
-    counter = 0
-    data = {}
-    # now_str = datetime.datetime.now().strftime(format)
+    # Remove special characters
+    text = text.replace("$", "").replace("&", "").replace("amp", "").replace(";", "").replace("\'", "")
 
-    # convert end into an integer to make a comparison
-    end = int(end.strftime(format_data))
+    print(f"Text: {text}")
+    text = p.clean(text)
+    return text
 
-    while end < test_int:
-        print(f'start: {start}')
-        print(f'end: {end}')
+# source: https://archive.is/9ApqZ#selection-2157.94-2157.818
+def analysis(df):
+    #Sentiment Analysis
+    SIA = SentimentIntensityAnalyzer()
 
-        # convert end integer into a string
-        end = str(end)
+    # Applying Model, Variable Creation
+    df['Polarity Score']=df["clean_tweet"].apply(lambda x:SIA.polarity_scores(x)['compound'])
+    df['Neutral Score']=df["clean_tweet"].apply(lambda x:SIA.polarity_scores(x)['neu'])
+    df['Negative Score']=df["clean_tweet"].apply(lambda x:SIA.polarity_scores(x)['neg'])
+    df['Positive Score']=df["clean_tweet"].apply(lambda x:SIA.polarity_scores(x)['pos'])
 
-        # convert end from string back into a datetime object
-        end = datetime.datetime.strptime(end, format_data)
+    # Converting 0 to 1 Decimal Score to a Categorical Variable
+    df['Sentiment']=''
+    df.loc[df['Polarity Score']>0,'Sentiment']='Positive'
+    df.loc[df['Polarity Score']==0,'Sentiment']='Neutral'
+    df.loc[df['Polarity Score']<0,'Sentiment']='Negative'
+    return df
 
-        # update end
-        end = find_end_time(start, end)
+def insert():
+    # create database
+    DB_NAME = "tweets"
+    DB_USER = "zachmoss"
+    DB_PASS = ""
+    DB_HOST = "127.0.0.1"
+    DB_PORT = "5432"
+    conn = ""
+    cur = ""
+    
+    try:
+        conn = psycopg2.connect(database=DB_NAME,
+                                user=DB_USER,
+                                password=DB_PASS,
+                                host=DB_HOST,
+                                port=DB_PORT)
+        print("Database connected successfully")
+    except:
+        print("Database not connected successfully")
+    
+    # create table
+    try:
+        cur = conn.cursor()  # creating a cursor
+ 
+        # executing queries to create table
+        cur.execute("""
+        CREATE TABLE Tweet
+        (
+            ID BIGINT PRIMARY KEY NOT NULL,
+            SYMBOL VARCHAR(10),
+            TEXT VARCHAR,
+            STARTTIME VARCHAR,
+            ENDTIME VARCHAR,
+            POLARITY_SCORE NUMERIC(4,3),
+            POSITIVE_SCORE NUMERIC(4,3),
+            NEUTRAL_SCORE NUMERIC(4,3),
+            NEGATIVE_SCORE NUMERIC(4,3),
+            SENTIMENT VARCHAR
+        )
+        """)
+        
+        # commit the changes
+        conn.commit()
+        print("Table Created successfully")
+    except Exception as e:
+        print("An exception occurred:", str(e))
+        print("Table not created")
+    
+    # inserting rows into database
+    for index, row in df.iterrows():
+        try:
+            # check if entry exists in database
+            q = f"""
+            SELECT 
+                *
+            FROM 
+                tweet
+            WHERE 
+                ID = {row["id"]} 
+            
+            """
+            cur.execute(q)
+            rows = cur.fetchall()
+            print(rows)
+            print('Data fetched successfully')
 
-        # get the data 
-        tweets = OAuth2_client.search_recent_tweets(query=q, start_time = start, end_time = end, max_results=100)
+            if not rows:
+                # If the entry doesn't exist, insert it into the database
+                cur.execute(f"""
+                INSERT INTO tweet (ID, SYMBOL, TEXT, STARTTIME, ENDTIME, POLARITY_SCORE, NEUTRAL_SCORE, NEGATIVE_SCORE, POSITIVE_SCORE, SENTIMENT)
+                VALUES
+                ({int(row['id'])}, '{str(row['symbol'])}', '{str(row["clean_tweet"])}', '{str(row["start"])}', '{str(row["end"])}', {float(row["Polarity Score"])}, {float(row["Neutral Score"])}, {float(row["Negative Score"])}, {float(row["Positive Score"])}, '{str(row["Sentiment"])}')
+                """)
+                conn.commit()
+                print('Data inserted successfully')
+            else:
+                print('Entry already exists in the database')
+        except Exception as e:
+            print(f'Exception occurred: {str(e)}')
+            conn.rollback()
+    conn.close()
 
-        # store the data
-        data = store_data(counter, tweets.data, start, end)
-        counter += 1
+def outputFile(df):
+    # reconnect to database
+    DB_NAME = "tweets"
+    DB_USER = "zachmoss"
+    DB_PASS = ""
+    DB_HOST = "127.0.0.1"
+    DB_PORT = "5432"
+    conn = ""
+    cur = ""
 
-        # update start
-        start = end
+    try:
+        conn = psycopg2.connect(database=DB_NAME,
+                                user=DB_USER,
+                                password=DB_PASS,
+                                host=DB_HOST,
+                                port=DB_PORT)
+        print("Database connected successfully")
+    except:
+        print("Database not connected successfully")
 
-        # increment end by one
-        end += datetime.timedelta(minutes=1)
+    # export to csv
+    try:
+        cur = conn.cursor()  # creating a cursor
+ 
+        # executing queries to create table
+        cur.execute("""
+        COPY tweet TO '/Users/zachmoss/Twitter Project/output.csv' WITH DELIMITER ',' CSV HEADER;
+        """)
+        
+        # commit the changes
+        conn.commit()
+        print("CSV Created successfully")
+    except Exception as e:
+        print("An exception occurred:", str(e))
+        print("CSV not created")
 
-        # convert end into an integer to make a comparison
-        end = int(end.strftime(format_data))
-    return data
+    conn.close()
 
-def main():
-    # TYPES: startTime and endTime: datetime objects
-    data = get_tweets_from_one_day(startTime, endTime)
-    print('Completed gathering tweets...')
-    df = pd.DataFrame(data)
-    df = df.T
-    print(df.head())
-    return data
 
+# store tweets in a database
 if __name__ == "__main__":
-    main()
-
-# goal is to create a function that collects all tweets from one day
-
-#TODO:
-# save data into a dataframe (tweets.data is cleanly stored into a DataFrame)
-# clean the data to have appropriate fields
-# understand the rate limits
-# automate this process of data collection
-# get information about the number of likes (way to clean the data)
+    df = collectData()
+    preprocessing(df)
+    df['clean_tweet'] = df.apply(preprocessing, axis=1)
+    df = analysis(df)
+    print()
+    print(df.columns)
+    print(df)
+    print()
+    insert()
+    outputFile(df)

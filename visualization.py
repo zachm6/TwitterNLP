@@ -1,6 +1,5 @@
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 from dash import Dash, dcc, html, Input, Output, dash_table
 
 app = Dash(__name__)
@@ -8,18 +7,13 @@ app = Dash(__name__)
 # -- Import and clean data (importing csv into pandas)
 df = pd.read_csv("output.csv")
 print(df.head())
-
 # ------------------------------------------------------------------------------
 # App layout
 app.layout = html.Div([
     html.H1("Twitter Sentiment Dashboard", style={'text-align': 'center'}),
     dcc.Dropdown(
         id="slct_symbol",
-        options=[
-            {"label": "TSLA", "value": "TSLA"},
-            {"label": "AMZN", "value": "AMZN"},
-            {"label": "AAPL", "value": "AAPL"}
-        ],
+        options=[{"label": symbol, "value": symbol} for symbol in df["symbol"].unique()],
         multi=False,
         value="TSLA",
         style={'width': "40%"}
@@ -38,7 +32,8 @@ app.layout = html.Div([
      Output(component_id='my_ternary_plot', component_property='figure'),
      Output(component_id='my_df', component_property='children')],
     [Input(component_id='slct_symbol', component_property='value'),
-     Input('my_ternary_plot', 'selectedData')]
+     Input('my_ternary_plot', 'selectedData')
+    ]
 )
 def update_graph(option_slctd, selected_data):
     print(option_slctd)
@@ -53,9 +48,10 @@ def update_graph(option_slctd, selected_data):
     fig = px.scatter_ternary(dff, a="positive_score", b="neutral_score", c="negative_score", hover_name="sentiment")
 
     table = dash_table.DataTable(
-        editable=True,
         data=dff.to_dict('records'),
-        columns=[{"name": i, "id": i} for i in dff.columns]
+        columns=[{"name": i, "id": i} for i in dff.columns],
+        page_current=0,
+        page_size=10
     )
 
     # Update table with selected data

@@ -17,7 +17,7 @@ def collectData():
         consumer_secret=config.API_KEY_SECRET, 
         access_token=config.ACCESS_TOKEN, 
         access_token_secret=config.ACCESS_TOKEN_SECRET
-        )
+    )
 
     # use the datetime module here (automate)
     yesterday = datetime.datetime.today() - datetime.timedelta(days=1)

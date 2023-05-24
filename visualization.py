@@ -6,7 +6,7 @@ app = Dash(__name__)
 
 # -- Import and clean data (importing csv into pandas)
 df = pd.read_csv("output.csv")
-print(df.head())
+
 # ------------------------------------------------------------------------------
 # App layout
 app.layout = html.Div([
@@ -36,8 +36,6 @@ app.layout = html.Div([
     ]
 )
 def update_graph(option_slctd, selected_data):
-    print(option_slctd)
-    print(type(option_slctd))
 
     container = "The company chosen by the user was: {}".format(option_slctd)
 
@@ -45,13 +43,40 @@ def update_graph(option_slctd, selected_data):
     dff = dff[dff["symbol"] == option_slctd]
 
     # Graphs
+
     fig = px.scatter_ternary(dff, a="positive_score", b="neutral_score", c="negative_score", hover_name="sentiment")
+
+    # Style data conditional based on sentiment column
+    sentiment_colors = {
+        'Positive': 'green',
+        'Negative': 'red',
+        'Neutral': 'blue'
+    }
+    
+    style_data_conditional = [
+        {
+            'if': {'filter_query': '{sentiment} eq "Positive"'},
+            'backgroundColor': sentiment_colors['Positive'],
+            'color': 'white'
+        },
+        {
+            'if': {'filter_query': '{sentiment} eq "Negative"'},
+            'backgroundColor': sentiment_colors['Negative'],
+            'color': 'white'
+        },
+        {
+            'if': {'filter_query': '{sentiment} eq "Neutral"'},
+            'backgroundColor': sentiment_colors['Neutral'],
+            'color': 'white'
+        }
+    ]
 
     table = dash_table.DataTable(
         data=dff.to_dict('records'),
         columns=[{"name": i, "id": i} for i in dff.columns],
         page_current=0,
-        page_size=10
+        page_size=10,
+        style_data_conditional=style_data_conditional
     )
 
     # Update table with selected data

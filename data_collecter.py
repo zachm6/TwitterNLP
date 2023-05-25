@@ -11,49 +11,57 @@ from nltk.sentiment.util import *
 # Authenticate using OAuth2.0 Twitter
 # OUTPUT: TYPE(dataframe)
 def collectData():
-    auth = tweepy.Client(
-        bearer_token=config.BEARER_TOKEN,  
-        consumer_key=config.API_KEY, 
-        consumer_secret=config.API_KEY_SECRET, 
-        access_token=config.ACCESS_TOKEN, 
-        access_token_secret=config.ACCESS_TOKEN_SECRET
-    )
-
-    # use the datetime module here (automate)
-    yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
-    year = yesterday.strftime("%Y")
-    month = yesterday.strftime("%m")
-    day = yesterday.strftime("%d")
-    hour = "00"
-    minute = '00'
-    minute_1 = '01'
-    startTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute}', '%Y%m%d%H%M')
-    endTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute_1}', '%Y%m%d%H%M')
+    # initialize root dataframe
     df = pd.DataFrame()
+    for hour in range(24):
+        for minute in range(0, 60, 20):
+            auth = tweepy.Client(
+                bearer_token=config.BEARER_TOKEN,  
+                consumer_key=config.API_KEY, 
+                consumer_secret=config.API_KEY_SECRET, 
+                access_token=config.ACCESS_TOKEN, 
+                access_token_secret=config.ACCESS_TOKEN_SECRET
+            )
 
-    symbol_list = ["TSLA", "AAPL", "AMZN"]
+            # use the datetime module here (automate)
+            yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
+            year = yesterday.strftime("%Y")
+            month = yesterday.strftime("%m")
+            day = yesterday.strftime("%d")
+            hour = str(hour)
+            minute = str(minute)
+            minute_1 = str(int(minute)+1)
+            startTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute}', '%Y%m%d%H%M')
+            endTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute_1}', '%Y%m%d%H%M')
 
-    # search tweets
-    for symbol in symbol_list:
-        q = f'{symbol} -is:retweet lang:en'
+            symbol_list = ["TSLA", "AAPL", "AMZN"]
 
-        tweets = auth.search_recent_tweets(
-            query=q, 
-            start_time=startTime, 
-            end_time=endTime, 
-            max_results=10)
+            # search tweets
+            for symbol in symbol_list:
+                q = f'{symbol} -is:retweet lang:en'
 
-        # extract 22k tweets per company (3 companies)
-        for tweet in tweets.data:
-            row = pd.DataFrame({
-                "id": [tweet.id],
-                "symbol": [symbol],
-                "text": [tweet.text],
-                "start": [startTime],
-                "end": [endTime]
-            })
-            df = pd.concat([df, row])
-            print(row)
+                tweets = auth.search_recent_tweets(
+                    query=q, 
+                    start_time=startTime, 
+                    end_time=endTime, 
+                    max_results=100)
+
+                # extract 22k tweets per company (3 companies)
+                try:
+                    for tweet in tweets.data:
+                        row = pd.DataFrame({
+                            "id": [tweet.id],
+                            "symbol": [symbol],
+                            "text": [tweet.text],
+                            "start": [startTime],
+                            "end": [endTime]
+                        })
+                        df = pd.concat([df, row])
+                        print(row)
+                        print()
+                except Exception as e:
+                    print("A {e} has occured")
+                    print()
     return df
 
 # source: https://archive.is/9ApqZ#selection-1633.90-1645.43

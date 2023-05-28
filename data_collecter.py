@@ -8,6 +8,7 @@ import preprocessor as p
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from nltk.sentiment.util import *
 import numpy as np
+import time
 
 # Authenticate using OAuth2.0 Twitter
 # OUTPUT: TYPE(dataframe)
@@ -15,7 +16,7 @@ def collectData():
     # initialize root dataframe
     df = pd.DataFrame()
     for hour in range(24):
-        for minute in range(0, 60, 20):
+        for minute in range(0, 60, 30):
             auth = tweepy.Client(
                 bearer_token=config.BEARER_TOKEN,  
                 consumer_key=config.API_KEY, 
@@ -41,19 +42,19 @@ def collectData():
             for symbol in symbol_list:
                 q = f'{symbol} -is:retweet lang:en'
 
-                tweets = auth.search_recent_tweets(
-                    query=q, 
-                    start_time=startTime, 
-                    end_time=endTime, 
-                    max_results=10,
-                    expansions=['author_id', 'entities.mentions.username', 'in_reply_to_user_id', 'referenced_tweets.id.author_id'],
-                    user_fields=['public_metrics'],
-                    tweet_fields=['public_metrics', 'created_at']    
-                )
-
                 # extract tweet data
                 try:
                     row = {}
+
+                    tweets = auth.search_recent_tweets(
+                        query=q, 
+                        start_time=startTime, 
+                        end_time=endTime, 
+                        max_results=100,
+                        expansions=['author_id', 'entities.mentions.username', 'in_reply_to_user_id', 'referenced_tweets.id.author_id'],
+                        user_fields=['public_metrics'],
+                        tweet_fields=['public_metrics', 'created_at']    
+                    )
 
                     # tweet data
                     for tweet in tweets.data:
@@ -67,7 +68,7 @@ def collectData():
                         row["like_count"] = tweet.public_metrics["like_count"]
                         row["quote_count"] = tweet.public_metrics["quote_count"]
                         row["impression_count"] = tweet.public_metrics["impression_count"]
-                        # row["created_at"] = tweet.created_at
+                        row["created_at"] = tweet.created_at
                         print(row)
                     
                     # user data
@@ -84,6 +85,12 @@ def collectData():
                     row_df = pd.DataFrame(row, index=[0])
                     df = pd.concat([df, row_df])
                     # print(df)
+                
+                except tweepy.errors.TooManyRequests as r:
+                    MINUTES_TO_SLEEP = 15
+                    print(f"Too many requests. Script is pausing for {MINUTES_TO_SLEEP} minutes")
+                    time.sleep(MINUTES_TO_SLEEP*60)
+                    print("Done Sleeping")
 
                 except Exception as e:
                     print(f"A {e} has occured")
@@ -131,6 +138,7 @@ def insert():
     conn = ""
     cur = ""
     
+    # connect to database
     try:
         conn = psycopg2.connect(database=DB_NAME,
                                 user=DB_USER,
@@ -154,6 +162,7 @@ def insert():
             TEXT VARCHAR,
             STARTTIME VARCHAR,
             ENDTIME VARCHAR,
+            CREATED_AT VARCHAR,
             POLARITY_SCORE NUMERIC(4,3),
             POSITIVE_SCORE NUMERIC(4,3),
             NEUTRAL_SCORE NUMERIC(4,3),
@@ -200,10 +209,10 @@ def insert():
             if not rows:
                 # If the entry doesn't exist, insert it into the database
                 cur.execute(f"""
-                INSERT INTO tweet (ID, SYMBOL, TEXT, STARTTIME, ENDTIME, POLARITY_SCORE, NEUTRAL_SCORE, NEGATIVE_SCORE, POSITIVE_SCORE, SENTIMENT, RETWEET_COUNT,
+                INSERT INTO tweet (ID, SYMBOL, TEXT, STARTTIME, ENDTIME, CREATED_AT ,POLARITY_SCORE, NEUTRAL_SCORE, NEGATIVE_SCORE, POSITIVE_SCORE, SENTIMENT, RETWEET_COUNT,
                 REPLY_COUNT, LIKE_COUNT, QUOTE_COUNT, IMPRESSION_COUNT, USERNAME, FOLLOWERS_COUNT, FOLLOWING_COUNT, TWEET_COUNT, LISTED_COUNT)
                 VALUES
-                ({int(row['id'])}, '{str(row['symbol'])}', '{str(row["clean_tweet"])}', '{str(row["start"])}', '{str(row["end"])}', {float(row["Polarity Score"])}, 
+                ({int(row['id'])}, '{str(row['symbol'])}', '{str(row["clean_tweet"])}', '{str(row["start"])}', '{str(row["end"])}', '{str(row["created_at"])}', {float(row["Polarity Score"])}, 
                 {float(row["Neutral Score"])}, {float(row["Negative Score"])}, {float(row["Positive Score"])}, '{str(row["Sentiment"])}', {int(row["retweet_count"])}, 
                 {int(row["reply_count"])}, {int(row["like_count"])}, {int(row["quote_count"])}, {int(row["impression_count"])}, '{str(row['username'])}', {int(row["followers_count"])},
                 {int(row["following_count"])}, {int(row["tweet_count"])}, {int(row["listed_count"])})

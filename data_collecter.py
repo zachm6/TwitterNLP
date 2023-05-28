@@ -7,6 +7,7 @@ import psycopg2
 import preprocessor as p
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from nltk.sentiment.util import *
+import numpy as np
 
 # Authenticate using OAuth2.0 Twitter
 # OUTPUT: TYPE(dataframe)
@@ -44,24 +45,50 @@ def collectData():
                     query=q, 
                     start_time=startTime, 
                     end_time=endTime, 
-                    max_results=100)
+                    max_results=10,
+                    expansions=['author_id', 'entities.mentions.username', 'in_reply_to_user_id', 'referenced_tweets.id.author_id'],
+                    user_fields=['public_metrics'],
+                    tweet_fields=['public_metrics', 'created_at']    
+                )
 
-                # extract 22k tweets per company (3 companies)
+                # extract tweet data
                 try:
+                    row = {}
+
+                    # tweet data
                     for tweet in tweets.data:
-                        row = pd.DataFrame({
-                            "id": [tweet.id],
-                            "symbol": [symbol],
-                            "text": [tweet.text],
-                            "start": [startTime],
-                            "end": [endTime]
-                        })
-                        df = pd.concat([df, row])
+                        row["id"] = tweet.id
+                        row["symbol"] = symbol
+                        row["text"] = tweet.text
+                        row["start"] = startTime
+                        row["end"] = endTime
+                        row["retweet_count"] = tweet.public_metrics["retweet_count"]
+                        row["reply_count"] = tweet.public_metrics["reply_count"]
+                        row["like_count"] = tweet.public_metrics["like_count"]
+                        row["quote_count"] = tweet.public_metrics["quote_count"]
+                        row["impression_count"] = tweet.public_metrics["impression_count"]
+                        # row["created_at"] = tweet.created_at
                         print(row)
-                        print()
+                    
+                    # user data
+                    for user in tweets.includes["users"]:
+
+                        row["username"] = user.data["username"]
+                        row["followers_count"] =  user.data["public_metrics"]["followers_count"]
+                        row["following_count"] =  user.data["public_metrics"]["following_count"]
+                        row["tweet_count"] = user.data["public_metrics"]["tweet_count"]
+                        row["listed_count"] =  user.data["public_metrics"]["listed_count"]
+                        # print(row)
+                    
+                    # convert dictionary to a dataframe and concatenate it to df
+                    row_df = pd.DataFrame(row, index=[0])
+                    df = pd.concat([df, row_df])
+                    # print(df)
+
                 except Exception as e:
-                    print("A {e} has occured")
+                    print(f"A {e} has occured")
                     print()
+
     return df
 
 # source: https://archive.is/9ApqZ#selection-1633.90-1645.43
@@ -131,7 +158,17 @@ def insert():
             POSITIVE_SCORE NUMERIC(4,3),
             NEUTRAL_SCORE NUMERIC(4,3),
             NEGATIVE_SCORE NUMERIC(4,3),
-            SENTIMENT VARCHAR
+            SENTIMENT VARCHAR,
+            RETWEET_COUNT INT,
+            REPLY_COUNT INT, 
+            LIKE_COUNT INT,
+            QUOTE_COUNT INT,
+            IMPRESSION_COUNT INT,
+            USERNAME VARCHAR,
+            FOLLOWERS_COUNT INT, 
+            FOLLOWING_COUNT INT, 
+            TWEET_COUNT INT,
+            LISTED_COUNT INT
         )
         """)
         
@@ -163,9 +200,13 @@ def insert():
             if not rows:
                 # If the entry doesn't exist, insert it into the database
                 cur.execute(f"""
-                INSERT INTO tweet (ID, SYMBOL, TEXT, STARTTIME, ENDTIME, POLARITY_SCORE, NEUTRAL_SCORE, NEGATIVE_SCORE, POSITIVE_SCORE, SENTIMENT)
+                INSERT INTO tweet (ID, SYMBOL, TEXT, STARTTIME, ENDTIME, POLARITY_SCORE, NEUTRAL_SCORE, NEGATIVE_SCORE, POSITIVE_SCORE, SENTIMENT, RETWEET_COUNT,
+                REPLY_COUNT, LIKE_COUNT, QUOTE_COUNT, IMPRESSION_COUNT, USERNAME, FOLLOWERS_COUNT, FOLLOWING_COUNT, TWEET_COUNT, LISTED_COUNT)
                 VALUES
-                ({int(row['id'])}, '{str(row['symbol'])}', '{str(row["clean_tweet"])}', '{str(row["start"])}', '{str(row["end"])}', {float(row["Polarity Score"])}, {float(row["Neutral Score"])}, {float(row["Negative Score"])}, {float(row["Positive Score"])}, '{str(row["Sentiment"])}')
+                ({int(row['id'])}, '{str(row['symbol'])}', '{str(row["clean_tweet"])}', '{str(row["start"])}', '{str(row["end"])}', {float(row["Polarity Score"])}, 
+                {float(row["Neutral Score"])}, {float(row["Negative Score"])}, {float(row["Positive Score"])}, '{str(row["Sentiment"])}', {int(row["retweet_count"])}, 
+                {int(row["reply_count"])}, {int(row["like_count"])}, {int(row["quote_count"])}, {int(row["impression_count"])}, '{str(row['username'])}', {int(row["followers_count"])},
+                {int(row["following_count"])}, {int(row["tweet_count"])}, {int(row["listed_count"])})
                 """)
                 conn.commit()
                 print('Data inserted successfully')

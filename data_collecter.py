@@ -79,16 +79,23 @@ def collectData():
                         row["following_count"] =  user.data["public_metrics"]["following_count"]
                         row["tweet_count"] = user.data["public_metrics"]["tweet_count"]
                         row["listed_count"] =  user.data["public_metrics"]["listed_count"]
-                        # print(row)
                     
                     # convert dictionary to a dataframe and concatenate it to df
                     row_df = pd.DataFrame(row, index=[0])
                     df = pd.concat([df, row_df])
-                    # print(df)
                 
                 except tweepy.errors.TooManyRequests as r:
                     MINUTES_TO_SLEEP = 15
-                    print(f"Too many requests. Script is pausing for {MINUTES_TO_SLEEP} minutes")
+
+                    # current time
+                    ct = datetime.datetime.now()
+                    ct = ct.strftime("%H:%M%:%S")
+                    call_time = ct + datetime.timedelta(minutes=15)
+                    call_time = call_time.strftime("%H:%M%:%S") 
+                    print(f"Too many requests. Script is pausing for {MINUTES_TO_SLEEP} minutes @ {ct}")
+                    print(f"The next call will occur at {call_time}")
+
+                    # sleep 
                     time.sleep(MINUTES_TO_SLEEP*60)
                     print("Done Sleeping")
 

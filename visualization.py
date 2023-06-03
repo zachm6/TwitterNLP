@@ -88,6 +88,5 @@ def update_graph(option_slctd, selected_data):
 
     return container, fig, table
 
-
 if __name__ == '__main__':
     app.run_server(debug=True)

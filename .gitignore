@@ -1,4 +1,5 @@
 config.py
+Notebooks/config.py
 data_storage.py
 generate_user_access_tokens.py
 __pycache__
@@ -6,4 +7,4 @@ __pycache__
 .vscode/
 twitter/
 generate_user_access_tokens.py
-output.csv
+deployment_commands.txt

@@ -43,7 +43,6 @@ def update_graph(option_slctd, selected_data):
     dff = dff[dff["symbol"] == option_slctd]
 
     # Graphs
-
     fig = px.scatter_ternary(dff, a="positive_score", b="neutral_score", c="negative_score", hover_name="sentiment")
 
     # Style data conditional based on sentiment column
@@ -87,6 +86,7 @@ def update_graph(option_slctd, selected_data):
         table.data = selected_df.to_dict('records')
 
     return container, fig, table
+
 
 if __name__ == '__main__':
     app.run_server(debug=True)

@@ -16,7 +16,7 @@ def collectData():
     # initialize root dataframe
     df = pd.DataFrame()
     for hour in range(24):
-        for minute in range(0, 60, 30):
+        for minute in range(0, 60, 5):
             auth = tweepy.Client(
                 bearer_token=config.BEARER_TOKEN,  
                 consumer_key=config.API_KEY, 
@@ -36,7 +36,7 @@ def collectData():
             startTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute}', '%Y%m%d%H%M')
             endTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute_1}', '%Y%m%d%H%M')
 
-            symbol_list = ["TSLA", "AAPL", "AMZN"]
+            symbol_list = ["TSLA", "AAPL", "MSFT"]
 
             # search tweets
             for symbol in symbol_list:
@@ -44,7 +44,7 @@ def collectData():
 
                 # extract tweet data
                 try:
-                    row = {}
+                    # row = {}
 
                     tweets = auth.search_recent_tweets(
                         query=q, 
@@ -58,11 +58,10 @@ def collectData():
 
                     # tweet data
                     for tweet in tweets.data:
+                        row = {}
                         row["id"] = tweet.id
                         row["symbol"] = symbol
                         row["text"] = tweet.text
-                        row["start"] = startTime
-                        row["end"] = endTime
                         row["retweet_count"] = tweet.public_metrics["retweet_count"]
                         row["reply_count"] = tweet.public_metrics["reply_count"]
                         row["like_count"] = tweet.public_metrics["like_count"]
@@ -70,29 +69,33 @@ def collectData():
                         row["impression_count"] = tweet.public_metrics["impression_count"]
                         row["created_at"] = tweet.created_at
                         print(row)
+
+                        # convert dictionary to a dataframe and concatenate it to df
+                        row_df = pd.DataFrame(row, index=[0])
+                        df = pd.concat([df, row_df])
                     
                     # user data
-                    for user in tweets.includes["users"]:
+                    # for user in tweets.includes["users"]:
 
-                        row["username"] = user.data["username"]
-                        row["followers_count"] =  user.data["public_metrics"]["followers_count"]
-                        row["following_count"] =  user.data["public_metrics"]["following_count"]
-                        row["tweet_count"] = user.data["public_metrics"]["tweet_count"]
-                        row["listed_count"] =  user.data["public_metrics"]["listed_count"]
+                    #     row["username"] = user.data["username"]
+                    #     row["followers_count"] =  user.data["public_metrics"]["followers_count"]
+                    #     row["following_count"] =  user.data["public_metrics"]["following_count"]
+                    #     row["tweet_count"] = user.data["public_metrics"]["tweet_count"]
+                    #     row["listed_count"] =  user.data["public_metrics"]["listed_count"]
                     
                     # convert dictionary to a dataframe and concatenate it to df
-                    row_df = pd.DataFrame(row, index=[0])
-                    df = pd.concat([df, row_df])
+                    # row_df = pd.DataFrame(row, index=[0])
+                    # df = pd.concat([df, row_df])
                 
                 except tweepy.errors.TooManyRequests as r:
                     MINUTES_TO_SLEEP = 15
 
                     # current time
                     ct = datetime.datetime.now()
-                    ct = ct.strftime("%H:%M%:%S")
+                    ct_str = ct.strftime("%H:%M%:%S")
                     call_time = ct + datetime.timedelta(minutes=15)
                     call_time = call_time.strftime("%H:%M%:%S") 
-                    print(f"Too many requests. Script is pausing for {MINUTES_TO_SLEEP} minutes @ {ct}")
+                    print(f"Too many requests. Script is pausing for {MINUTES_TO_SLEEP} minutes @ {ct_str}")
                     print(f"The next call will occur at {call_time}")
 
                     # sleep 
@@ -102,7 +105,7 @@ def collectData():
                 except Exception as e:
                     print(f"A {e} has occured")
                     print()
-
+    df.to_csv("beforePreProcessing.csv")
     return df
 
 # source: https://archive.is/9ApqZ#selection-1633.90-1645.43
@@ -159,7 +162,7 @@ def insert():
     # create table
     try:
         cur = conn.cursor()  # creating a cursor
- 
+
         # executing queries to create table
         cur.execute("""
         CREATE TABLE Tweet
@@ -167,8 +170,6 @@ def insert():
             ID BIGINT PRIMARY KEY NOT NULL,
             SYMBOL VARCHAR(10),
             TEXT VARCHAR,
-            STARTTIME VARCHAR,
-            ENDTIME VARCHAR,
             CREATED_AT VARCHAR,
             POLARITY_SCORE NUMERIC(4,3),
             POSITIVE_SCORE NUMERIC(4,3),
@@ -179,14 +180,37 @@ def insert():
             REPLY_COUNT INT, 
             LIKE_COUNT INT,
             QUOTE_COUNT INT,
-            IMPRESSION_COUNT INT,
-            USERNAME VARCHAR,
-            FOLLOWERS_COUNT INT, 
-            FOLLOWING_COUNT INT, 
-            TWEET_COUNT INT,
-            LISTED_COUNT INT
+            IMPRESSION_COUNT INT
         )
         """)
+ 
+        # # executing queries to create table
+        # cur.execute("""
+        # CREATE TABLE Tweet
+        # (
+        #     ID BIGINT PRIMARY KEY NOT NULL,
+        #     SYMBOL VARCHAR(10),
+        #     TEXT VARCHAR,
+        #     STARTTIME VARCHAR,
+        #     ENDTIME VARCHAR,
+        #     CREATED_AT VARCHAR,
+        #     POLARITY_SCORE NUMERIC(4,3),
+        #     POSITIVE_SCORE NUMERIC(4,3),
+        #     NEUTRAL_SCORE NUMERIC(4,3),
+        #     NEGATIVE_SCORE NUMERIC(4,3),
+        #     SENTIMENT VARCHAR,
+        #     RETWEET_COUNT INT,
+        #     REPLY_COUNT INT, 
+        #     LIKE_COUNT INT,
+        #     QUOTE_COUNT INT,
+        #     IMPRESSION_COUNT INT,
+        #     USERNAME VARCHAR,
+        #     FOLLOWERS_COUNT INT, 
+        #     FOLLOWING_COUNT INT, 
+        #     TWEET_COUNT INT,
+        #     LISTED_COUNT INT
+        # )
+        # """)
         
         # commit the changes
         conn.commit()
@@ -214,16 +238,24 @@ def insert():
             print('Data fetched successfully')
 
             if not rows:
-                # If the entry doesn't exist, insert it into the database
                 cur.execute(f"""
-                INSERT INTO tweet (ID, SYMBOL, TEXT, STARTTIME, ENDTIME, CREATED_AT ,POLARITY_SCORE, NEUTRAL_SCORE, NEGATIVE_SCORE, POSITIVE_SCORE, SENTIMENT, RETWEET_COUNT,
-                REPLY_COUNT, LIKE_COUNT, QUOTE_COUNT, IMPRESSION_COUNT, USERNAME, FOLLOWERS_COUNT, FOLLOWING_COUNT, TWEET_COUNT, LISTED_COUNT)
+                INSERT INTO tweet (ID, SYMBOL, TEXT, CREATED_AT, POLARITY_SCORE, NEUTRAL_SCORE, NEGATIVE_SCORE, POSITIVE_SCORE, SENTIMENT, RETWEET_COUNT,
+                REPLY_COUNT, LIKE_COUNT, QUOTE_COUNT, IMPRESSION_COUNT)
                 VALUES
-                ({int(row['id'])}, '{str(row['symbol'])}', '{str(row["clean_tweet"])}', '{str(row["start"])}', '{str(row["end"])}', '{str(row["created_at"])}', {float(row["Polarity Score"])}, 
+                ({int(row['id'])}, '{str(row['symbol'])}', '{str(row["clean_tweet"])}', '{str(row["created_at"])}', {float(row["Polarity Score"])}, 
                 {float(row["Neutral Score"])}, {float(row["Negative Score"])}, {float(row["Positive Score"])}, '{str(row["Sentiment"])}', {int(row["retweet_count"])}, 
-                {int(row["reply_count"])}, {int(row["like_count"])}, {int(row["quote_count"])}, {int(row["impression_count"])}, '{str(row['username'])}', {int(row["followers_count"])},
-                {int(row["following_count"])}, {int(row["tweet_count"])}, {int(row["listed_count"])})
+                {int(row["reply_count"])}, {int(row["like_count"])}, {int(row["quote_count"])}, {int(row["impression_count"])})
                 """)
+                # # If the entry doesn't exist, insert it into the database
+                # cur.execute(f"""
+                # INSERT INTO tweet (ID, SYMBOL, TEXT, STARTTIME, ENDTIME, CREATED_AT, POLARITY_SCORE, NEUTRAL_SCORE, NEGATIVE_SCORE, POSITIVE_SCORE, SENTIMENT, RETWEET_COUNT,
+                # REPLY_COUNT, LIKE_COUNT, QUOTE_COUNT, IMPRESSION_COUNT, USERNAME, FOLLOWERS_COUNT, FOLLOWING_COUNT, TWEET_COUNT, LISTED_COUNT)
+                # VALUES
+                # ({int(row['id'])}, '{str(row['symbol'])}', '{str(row["clean_tweet"])}', '{str(row["start"])}', '{str(row["end"])}', '{str(row["created_at"])}', {float(row["Polarity Score"])}, 
+                # {float(row["Neutral Score"])}, {float(row["Negative Score"])}, {float(row["Positive Score"])}, '{str(row["Sentiment"])}', {int(row["retweet_count"])}, 
+                # {int(row["reply_count"])}, {int(row["like_count"])}, {int(row["quote_count"])}, {int(row["impression_count"])}, '{str(row['username'])}', {int(row["followers_count"])},
+                # {int(row["following_count"])}, {int(row["tweet_count"])}, {int(row["listed_count"])})
+                # """)
                 conn.commit()
                 print('Data inserted successfully')
             else:

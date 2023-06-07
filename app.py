@@ -4,7 +4,7 @@ from dash import Dash, dcc, html, Input, Output, dash_table
 import dash_bootstrap_components as dbc
 from datetime import date
 
-app = Dash(__name__)
+app = Dash(__name__, external_stylesheets=[dbc.themes.SLATE])
 
 # -- Import and clean data (importing csv into pandas)
 df = pd.read_csv("output.csv")
@@ -16,7 +16,7 @@ app.layout = dbc.Container(html.Div([
     # Dashboard Title
     dbc.Row([
         dbc.Col([
-            html.H1("Twitter Sentiment Dashboard", style={'text-align': 'center'})
+            html.H1("Twitter Sentiment Dashboard")
         ], width=8)
     ]),
 
@@ -54,28 +54,27 @@ app.layout = dbc.Container(html.Div([
     html.Br(),
     dbc.Row([
         dbc.Col([
-            html.Label('Total Records'),
-            html.Div(id='total_container', children=[]),
-            html.Br()
-        ], width={"size": 3}),
+            html.H4('Total Records', className="card-title"),
+            html.P(id='total_container', children=[], className="card-text")
+            # html.Label('Total Records'),
+            # html.Div(id='total_container', children=[]),
+            # html.Br()
+        ]),
         dbc.Col([
-            html.Label('Positive Records'),
-            html.Div(id='positive_container', children=[]),
-            html.Br()
-        ], width={"size": 3}),
+            html.H4('Positive Records', className="card-title"),
+            html.P(id='positive_container', children=[], className="card-text"),
+        ]),
         dbc.Col([
-            html.Label('Neutral Records'),
-            html.Div(id='neutral_container', children=[]),
-            html.Br()
-        ], width={"size": 3}),
+            html.H4('Neutral Records', className="card-title"),
+            html.P(id='neutral_container', children=[], className="card-text")
+        ]),
         dbc.Col([
-            html.Label('Negative Records'),
-            html.Div(id='negative_container', children=[]),
-            html.Br()
-        ], width={"size": 3}),
-    ], className="row-cols-4"),
-    html.Div(id='output_container', children=[]),
+            html.H4('Negative Records', className="card-title"),
+            html.P(id='negative_container', children=[], className="card-text")
+        ]),
+    ]),
     html.Br(),
+    html.Div(id='output_container', children=[]),
     html.Div(id='my_df', children=[]),
     html.Br(),
     dcc.Graph(id='my_ternary_plot', figure={})
@@ -101,7 +100,6 @@ def update_graph(option_slctd, selected_data):
 
     dff = df.copy()
     dff = dff[dff["symbol"] == option_slctd]
-
 
     # total records
     total = len(dff)
@@ -157,6 +155,16 @@ def update_graph(option_slctd, selected_data):
         selected_indices = [point['pointIndex'] for point in selected_points]
         selected_df = dff.iloc[selected_indices]
         table.data = selected_df.to_dict('records')
+        total = len(selected_df)
+
+        # positive records
+        num_positive = str(round(100*(len(selected_df[selected_df["sentiment"] == "Positive"]) / total), 1)) + "%"
+
+        # neutral records
+        num_neutral = str(round(100*(len(selected_df[selected_df["sentiment"] == "Neutral"]) / total), 1)) + "%"
+
+        # negative records
+        num_negative = str(round(100*(len(selected_df[selected_df["sentiment"] == "Negative"]) / total), 1)) + "%"
 
     return total, num_positive, num_neutral, num_negative, container, fig, table
 

@@ -36,7 +36,7 @@ def collectData():
             startTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute}', '%Y%m%d%H%M')
             endTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute_1}', '%Y%m%d%H%M')
 
-            symbol_list = ["TSLA", "AAPL", "MSFT"]
+            symbol_list = ["Nvidia", "Chevron", "Meta"]
 
             # search tweets
             for symbol in symbol_list:

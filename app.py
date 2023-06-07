@@ -44,21 +44,11 @@ app.layout = dbc.Container(html.Div([
             )
         ], width=4)
     ]),
-    # dcc.Dropdown(
-    #     id="slct_symbol",
-    #     options=[{"label": symbol, "value": symbol} for symbol in df["symbol"].unique()],
-    #     multi=False,
-    #     value="TSLA",
-    #     style={'width': "40%"}
-    # ),
     html.Br(),
     dbc.Row([
         dbc.Col([
             html.H4('Total Records', className="card-title"),
             html.P(id='total_container', children=[], className="card-text")
-            # html.Label('Total Records'),
-            # html.Div(id='total_container', children=[]),
-            # html.Br()
         ]),
         dbc.Col([
             html.H4('Positive Records', className="card-title"),
@@ -95,6 +85,7 @@ app.layout = dbc.Container(html.Div([
     ]
 )
 def update_graph(option_slctd, selected_data):
+    DESIRED_COLUMNS = ["impression_count", "text", "sentiment"]
 
     container = "The company chosen by the user was: {}".format(option_slctd)
 
@@ -143,17 +134,18 @@ def update_graph(option_slctd, selected_data):
 
     table = dash_table.DataTable(
         data=dff.to_dict('records'),
-        columns=[{"name": i, "id": i} for i in dff.columns],
+        columns=[{"name": i, "id": i} for i in dff[DESIRED_COLUMNS].columns],
         page_current=0,
-        page_size=10,
-        style_data_conditional=style_data_conditional
+        page_size=5,
+        style_data_conditional=style_data_conditional,
+        style_cell={'textAlign': 'left'},
     )
 
     # Update table with selected data
     if selected_data:
         selected_points = selected_data['points']
         selected_indices = [point['pointIndex'] for point in selected_points]
-        selected_df = dff.iloc[selected_indices]
+        selected_df = dff[DESIRED_COLUMNS].iloc[selected_indices]
         table.data = selected_df.to_dict('records')
         total = len(selected_df)
 
@@ -170,4 +162,5 @@ def update_graph(option_slctd, selected_data):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    # app.run_server(debug=True) # LOCAL
+    app.run_server(debug=False, host="0.0.0.0", port=8080)

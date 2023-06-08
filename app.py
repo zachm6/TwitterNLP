@@ -3,6 +3,7 @@ import plotly.express as px
 from dash import Dash, dcc, html, Input, Output, dash_table
 import dash_bootstrap_components as dbc
 from datetime import date
+from datetime import datetime
 
 app = Dash(__name__, external_stylesheets=[dbc.themes.SLATE])
 
@@ -17,8 +18,8 @@ app.layout = dbc.Container(html.Div([
     dbc.Row([
         dbc.Col([
             html.H1("Twitter Sentiment Dashboard")
-        ], width=8)
-    ]),
+        ], width=5)
+    ], justify="center"),
 
     # Dashboard Filters
     dbc.Row([
@@ -35,12 +36,11 @@ app.layout = dbc.Container(html.Div([
         dbc.Col([
             html.Label('Date'),
             html.Br(),
-            dcc.DatePickerSingle(
-                id='my-date-picker-single',
-                min_date_allowed=date(1995, 8, 5),
-                max_date_allowed=date(2017, 9, 19),
-                initial_visible_month=date(2017, 8, 5),
-                date=date(2017, 8, 25)
+            dcc.Input(
+                id="my-date", 
+                type="text", 
+                placeholder="Y/M/D/H/MIN", 
+                debounce=True
             )
         ], width=4)
     ]),
@@ -81,28 +81,49 @@ app.layout = dbc.Container(html.Div([
      Output(component_id='my_ternary_plot', component_property='figure'),
      Output(component_id='my_df', component_property='children')],
     [Input(component_id='slct_symbol', component_property='value'),
-     Input('my_ternary_plot', 'selectedData')
+     Input('my_ternary_plot', 'selectedData'),
+     Input('my-date','value')
     ]
 )
-def update_graph(option_slctd, selected_data):
-    DESIRED_COLUMNS = ["impression_count", "text", "sentiment"]
+def update_graph(option_slctd, selected_data, date_selected):
+    DESIRED_COLUMNS = ["impression_count", "text", "created_at", "sentiment"]
 
-    container = "The company chosen by the user was: {}".format(option_slctd)
+    container = "The company chosen by the user was: {} {}".format(option_slctd, str(date_selected))
 
     dff = df.copy()
     dff = dff[dff["symbol"] == option_slctd]
+    # print(type(dff["created_at"][0]))
+    # date_str = dff["created_at"][0]
+    # print(datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S%z").strftime("%d"))
+    if date_selected:
+        print(date_selected)
+        print("Date was selected")
+        user_date_list = date_selected.split("/")
+        date_map = {
+                0: "%Y",
+                1: "%m", 
+                2: "%d",
+                3: "%H",
+                4: "%M"
+            }
+        boolean_lists = []
+        for i in range(len(user_date_list)):
+            boolean_list_interval = dff["created_at"].apply(lambda x:datetime.strptime(x, "%Y-%m-%d %H:%M:%S%z").strftime(date_map[i]) == user_date_list[i])
+            boolean_lists.append(boolean_list_interval)
+        dff = dff.apply(lambda x: x[[all(series) for series in pd.concat(boolean_lists, axis=1).values]])
+        print(dff)
 
     # total records
     total = len(dff)
 
     # positive records
-    num_positive = str(round(100*(len(dff[dff["sentiment"] == "Positive"]) / total), 1)) + "%"
+    num_positive = str(round(100*(len(dff[dff["sentiment"] == "Positive"]) / total), 1)) + "%" if total != 0 else 0
 
     # neutral records
-    num_neutral = str(round(100*(len(dff[dff["sentiment"] == "Neutral"]) / total), 1)) + "%"
+    num_neutral = str(round(100*(len(dff[dff["sentiment"] == "Neutral"]) / total), 1)) + "%" if total != 0 else 0
 
     # negative records
-    num_negative = str(round(100*(len(dff[dff["sentiment"] == "Negative"]) / total), 1)) + "%"
+    num_negative = str(round(100*(len(dff[dff["sentiment"] == "Negative"]) / total), 1)) + "%" if total != 0 else 0
 
     # Graphs
     fig = px.scatter_ternary(dff, a="positive_score", b="neutral_score", c="negative_score", hover_name="sentiment")
@@ -138,7 +159,11 @@ def update_graph(option_slctd, selected_data):
         page_current=0,
         page_size=5,
         style_data_conditional=style_data_conditional,
-        style_cell={'textAlign': 'left'},
+        style_cell={
+            'textAlign': 'left',
+            'whiteSpace': 'pre-line'
+            },
+        sort_action="native"
     )
 
     # Update table with selected data
@@ -150,17 +175,17 @@ def update_graph(option_slctd, selected_data):
         total = len(selected_df)
 
         # positive records
-        num_positive = str(round(100*(len(selected_df[selected_df["sentiment"] == "Positive"]) / total), 1)) + "%"
+        num_positive = str(round(100*(len(selected_df[selected_df["sentiment"] == "Positive"]) / total), 1)) + "%" if total != 0 else 0
 
         # neutral records
-        num_neutral = str(round(100*(len(selected_df[selected_df["sentiment"] == "Neutral"]) / total), 1)) + "%"
+        num_neutral = str(round(100*(len(selected_df[selected_df["sentiment"] == "Neutral"]) / total), 1)) + "%" if total != 0 else 0
 
         # negative records
-        num_negative = str(round(100*(len(selected_df[selected_df["sentiment"] == "Negative"]) / total), 1)) + "%"
+        num_negative = str(round(100*(len(selected_df[selected_df["sentiment"] == "Negative"]) / total), 1)) + "%" if total != 0 else 0
 
     return total, num_positive, num_neutral, num_negative, container, fig, table
 
 
 if __name__ == '__main__':
-    # app.run_server(debug=True) # LOCAL
-    app.run_server(debug=False, host="0.0.0.0", port=8080)
+    app.run_server(debug=True) # LOCAL
+    # app.run_server(debug=False, host="0.0.0.0", port=8080)

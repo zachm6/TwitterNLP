@@ -9,6 +9,7 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from nltk.sentiment.util import *
 import numpy as np
 import time
+import signal
 
 # Authenticate using OAuth2.0 Twitter
 # OUTPUT: TYPE(dataframe)
@@ -32,11 +33,11 @@ def collectData():
             day = yesterday.strftime("%d")
             hour = str(hour)
             minute = str(minute)
-            minute_1 = str(int(minute)+1)
+            minute_1 = str(int(minute)+4)
             startTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute}', '%Y%m%d%H%M')
             endTime = datetime.datetime.strptime(f'{year}{month}{day}{hour}{minute_1}', '%Y%m%d%H%M')
 
-            symbol_list = ["Nvidia", "Chevron", "Meta"]
+            symbol_list = ["Tesla", "Microsoft", "Apple", "Meta", "Google"]
 
             # search tweets
             for symbol in symbol_list:
@@ -116,12 +117,15 @@ def preprocessing(row):
     # Remove special characters
     text = text.replace("$", "").replace("&", "").replace("amp", "").replace(";", "").replace("\'", "")
 
+    print(row)
     print(f"Text: {text}")
     text = p.clean(text)
     return text
 
 # source: https://archive.is/9ApqZ#selection-2157.94-2157.818
 def analysis(df):
+    print("Analyzing data...")
+    print()
     #Sentiment Analysis
     SIA = SentimentIntensityAnalyzer()
 
@@ -230,6 +234,7 @@ def insert():
                 tweet
             WHERE 
                 ID = {row["id"]} 
+                OR TEXT = '{row["clean_tweet"]}'
             
             """
             cur.execute(q)
@@ -246,16 +251,6 @@ def insert():
                 {float(row["Neutral Score"])}, {float(row["Negative Score"])}, {float(row["Positive Score"])}, '{str(row["Sentiment"])}', {int(row["retweet_count"])}, 
                 {int(row["reply_count"])}, {int(row["like_count"])}, {int(row["quote_count"])}, {int(row["impression_count"])})
                 """)
-                # # If the entry doesn't exist, insert it into the database
-                # cur.execute(f"""
-                # INSERT INTO tweet (ID, SYMBOL, TEXT, STARTTIME, ENDTIME, CREATED_AT, POLARITY_SCORE, NEUTRAL_SCORE, NEGATIVE_SCORE, POSITIVE_SCORE, SENTIMENT, RETWEET_COUNT,
-                # REPLY_COUNT, LIKE_COUNT, QUOTE_COUNT, IMPRESSION_COUNT, USERNAME, FOLLOWERS_COUNT, FOLLOWING_COUNT, TWEET_COUNT, LISTED_COUNT)
-                # VALUES
-                # ({int(row['id'])}, '{str(row['symbol'])}', '{str(row["clean_tweet"])}', '{str(row["start"])}', '{str(row["end"])}', '{str(row["created_at"])}', {float(row["Polarity Score"])}, 
-                # {float(row["Neutral Score"])}, {float(row["Negative Score"])}, {float(row["Positive Score"])}, '{str(row["Sentiment"])}', {int(row["retweet_count"])}, 
-                # {int(row["reply_count"])}, {int(row["like_count"])}, {int(row["quote_count"])}, {int(row["impression_count"])}, '{str(row['username'])}', {int(row["followers_count"])},
-                # {int(row["following_count"])}, {int(row["tweet_count"])}, {int(row["listed_count"])})
-                # """)
                 conn.commit()
                 print('Data inserted successfully')
             else:
@@ -305,8 +300,25 @@ def outputFile(df):
 # store tweets in a database
 if __name__ == "__main__":
     df = collectData()
-    preprocessing(df)
+    # df = pd.read_csv("beforePreProcessing.csv")
+
+    # drop duplicates
+    df = df.iloc[df["text"].drop_duplicates().index]
+
+    # remove tweets with low interativity
+    df = df[(df["impression_count"] > 11)]
+    print(len(df))
+
+    # preprocessing(df)
+    print("Preprecosseing Complete")
     df['clean_tweet'] = df.apply(preprocessing, axis=1)
+    print()
+
     df = analysis(df)
+    print("Analysis Complete!")
+    print()
+
+    print("Inserting Data!")
     insert()
+
     outputFile(df)

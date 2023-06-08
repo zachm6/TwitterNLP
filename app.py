@@ -1,34 +1,93 @@
 import pandas as pd
 import plotly.express as px
 from dash import Dash, dcc, html, Input, Output, dash_table
+import dash_bootstrap_components as dbc
+from datetime import date
 
-app = Dash(__name__)
+app = Dash(__name__, external_stylesheets=[dbc.themes.SLATE])
 
 # -- Import and clean data (importing csv into pandas)
 df = pd.read_csv("output.csv")
 
 # ------------------------------------------------------------------------------
 # App layout
-app.layout = html.Div([
-    html.H1("Twitter Sentiment Dashboard", style={'text-align': 'center'}),
-    dcc.Dropdown(
-        id="slct_symbol",
-        options=[{"label": symbol, "value": symbol} for symbol in df["symbol"].unique()],
-        multi=False,
-        value="TSLA",
-        style={'width': "40%"}
-    ),
-    html.Div(id='output_container', children=[]),
+app.layout = dbc.Container(html.Div([
+
+    # Dashboard Title
+    dbc.Row([
+        dbc.Col([
+            html.H1("Twitter Sentiment Dashboard")
+        ], width=8)
+    ]),
+
+    # Dashboard Filters
+    dbc.Row([
+        dbc.Col([
+            html.Label('Symbol'),
+            dcc.Dropdown(
+                id="slct_symbol",
+                options=[{"label": symbol, "value": symbol} for symbol in df["symbol"].unique()],
+                multi=False,
+                value="TSLA"
+            ),
+            html.Br()
+        ], width=4),
+        dbc.Col([
+            html.Label('Date'),
+            html.Br(),
+            dcc.DatePickerSingle(
+                id='my-date-picker-single',
+                min_date_allowed=date(1995, 8, 5),
+                max_date_allowed=date(2017, 9, 19),
+                initial_visible_month=date(2017, 8, 5),
+                date=date(2017, 8, 25)
+            )
+        ], width=4)
+    ]),
+    # dcc.Dropdown(
+    #     id="slct_symbol",
+    #     options=[{"label": symbol, "value": symbol} for symbol in df["symbol"].unique()],
+    #     multi=False,
+    #     value="TSLA",
+    #     style={'width': "40%"}
+    # ),
     html.Br(),
+    dbc.Row([
+        dbc.Col([
+            html.H4('Total Records', className="card-title"),
+            html.P(id='total_container', children=[], className="card-text")
+            # html.Label('Total Records'),
+            # html.Div(id='total_container', children=[]),
+            # html.Br()
+        ]),
+        dbc.Col([
+            html.H4('Positive Records', className="card-title"),
+            html.P(id='positive_container', children=[], className="card-text"),
+        ]),
+        dbc.Col([
+            html.H4('Neutral Records', className="card-title"),
+            html.P(id='neutral_container', children=[], className="card-text")
+        ]),
+        dbc.Col([
+            html.H4('Negative Records', className="card-title"),
+            html.P(id='negative_container', children=[], className="card-text")
+        ]),
+    ]),
+    html.Br(),
+    html.Div(id='output_container', children=[]),
     html.Div(id='my_df', children=[]),
     html.Br(),
     dcc.Graph(id='my_ternary_plot', figure={})
-])
+]))
 
 # ------------------------------------------------------------------------------
 # Connect the Plotly graphs with Dash Components
 @app.callback(
-    [Output(component_id='output_container', component_property='children'),
+    [Output(component_id='total_container', component_property='children'),
+     Output(component_id='positive_container', component_property='children'),
+     Output(component_id='neutral_container', component_property='children'),
+     Output(component_id='negative_container', component_property='children'),
+     Output(component_id='output_container', component_property='children'),
      Output(component_id='my_ternary_plot', component_property='figure'),
      Output(component_id='my_df', component_property='children')],
     [Input(component_id='slct_symbol', component_property='value'),
@@ -41,6 +100,18 @@ def update_graph(option_slctd, selected_data):
 
     dff = df.copy()
     dff = dff[dff["symbol"] == option_slctd]
+
+    # total records
+    total = len(dff)
+
+    # positive records
+    num_positive = str(round(100*(len(dff[dff["sentiment"] == "Positive"]) / total), 1)) + "%"
+
+    # neutral records
+    num_neutral = str(round(100*(len(dff[dff["sentiment"] == "Neutral"]) / total), 1)) + "%"
+
+    # negative records
+    num_negative = str(round(100*(len(dff[dff["sentiment"] == "Negative"]) / total), 1)) + "%"
 
     # Graphs
     fig = px.scatter_ternary(dff, a="positive_score", b="neutral_score", c="negative_score", hover_name="sentiment")
@@ -84,8 +155,18 @@ def update_graph(option_slctd, selected_data):
         selected_indices = [point['pointIndex'] for point in selected_points]
         selected_df = dff.iloc[selected_indices]
         table.data = selected_df.to_dict('records')
+        total = len(selected_df)
 
-    return container, fig, table
+        # positive records
+        num_positive = str(round(100*(len(selected_df[selected_df["sentiment"] == "Positive"]) / total), 1)) + "%"
+
+        # neutral records
+        num_neutral = str(round(100*(len(selected_df[selected_df["sentiment"] == "Neutral"]) / total), 1)) + "%"
+
+        # negative records
+        num_negative = str(round(100*(len(selected_df[selected_df["sentiment"] == "Negative"]) / total), 1)) + "%"
+
+    return total, num_positive, num_neutral, num_negative, container, fig, table
 
 
 if __name__ == '__main__':
